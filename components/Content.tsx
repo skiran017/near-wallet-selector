@@ -1,16 +1,21 @@
 import React, { Fragment, useCallback, useEffect, useState } from 'react';
 import { providers, utils } from 'near-api-js';
-import { AccountView, CodeResult } from 'near-api-js/lib/providers/provider';
+import type {
+  AccountView,
+  CodeResult,
+} from 'near-api-js/lib/providers/provider';
+import { Transaction } from '@near-wallet-selector/core';
 
-import { Account, Message } from '../interfaces';
+import type { Account, Message } from '../interfaces';
 import { useWalletSelector } from '../contexts/WalletSelectorContext';
+// import { CONTRACT_ID } from '../constants';
 
 const SUGGESTED_DONATION = '0';
 // eslint-disable-next-line
 const BOATLOAD_OF_GAS = utils.format.parseNearAmount('0.00000000003')!;
 
-function Content() {
-  const { selector, accounts, accountId, setAccountId } = useWalletSelector();
+const Content: React.FC = () => {
+  const { selector, modal, accounts, accountId } = useWalletSelector();
   const [account, setAccount] = useState<Account | null>(null);
   const [messages, setMessages] = useState<Array<Message>>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -20,8 +25,8 @@ function Content() {
       return null;
     }
 
-    const { nodeUrl } = selector.network;
-    const provider = new providers.JsonRpcProvider({ url: nodeUrl });
+    const { network } = selector.options;
+    const provider = new providers.JsonRpcProvider({ url: network.nodeUrl });
 
     return provider
       .query<AccountView>({
@@ -33,30 +38,29 @@ function Content() {
         ...data,
         account_id: accountId,
       }));
-  }, [accountId, selector.network]);
+  }, [accountId, selector.options]);
 
-  const getMessages = useCallback(() => {
-    const provider = new providers.JsonRpcProvider({
-      url: selector.network.nodeUrl,
-    });
+  // const getMessages = useCallback(() => {
+  //   const { network } = selector.options;
+  //   const provider = new providers.JsonRpcProvider({ url: network.nodeUrl });
 
-    return provider
-      .query<CodeResult>({
-        request_type: 'call_function',
-        account_id: selector.getContractId(),
-        method_name: 'getMessages',
-        args_base64: '',
-        finality: 'optimistic',
-      })
-      .then((res) => JSON.parse(Buffer.from(res.result).toString()));
-  }, [selector]);
+  //   return provider
+  //     .query<CodeResult>({
+  //       request_type: 'call_function',
+  //       account_id: CONTRACT_ID,
+  //       method_name: 'getMessages',
+  //       args_base64: '',
+  //       finality: 'optimistic',
+  //     })
+  //     .then((res) => JSON.parse(Buffer.from(res.result).toString()));
+  // }, [selector]);
 
-  useEffect(() => {
-    // TODO: don't just fetch once; subscribe!
-    getMessages().then(setMessages);
+  // useEffect(() => {
+  //   // TODO: don't just fetch once; subscribe!
+  //   getMessages().then(setMessages);
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, []);
 
   useEffect(() => {
     if (!accountId) {
@@ -72,18 +76,21 @@ function Content() {
   }, [accountId, getAccount]);
 
   const handleSignIn = () => {
-    selector.show();
+    console.log(modal);
+    modal.show();
   };
 
-  const handleSignOut = () => {
-    selector.signOut().catch((err: any) => {
+  const handleSignOut = async () => {
+    const wallet = await selector.wallet();
+
+    wallet.signOut().catch((err) => {
       console.log('Failed to sign out');
       console.error(err);
     });
   };
 
-  const handleSwitchProvider = () => {
-    selector.show();
+  const handleSwitchWallet = () => {
+    modal.show();
   };
 
   const handleSwitchAccount = () => {
@@ -92,82 +99,24 @@ function Content() {
 
     const nextAccountId = accounts[nextIndex].accountId;
 
-    setAccountId(nextAccountId);
+    selector.setActiveAccount(nextAccountId);
+
     alert('Switched account to ' + nextAccountId);
   };
 
-  // const handleSendMultipleTransactions = () => {
-  //   selector.signAndSendTransactions({
-  //     transactions: [
-  //       {
-  //         // Deploy your own version of https://github.com/near-examples/rust-counter using Gitpod to get a valid receiverId.
-  //         receiverId: 'dev-1648806797290-14624341764914',
-  //         actions: [
-  //           {
-  //             type: 'FunctionCall',
-  //             params: {
-  //               methodName: 'increment',
-  //               args: {},
-  //               gas: BOATLOAD_OF_GAS,
-  //               deposit: utils.format.parseNearAmount('0')!,
-  //             },
-  //           },
-  //         ],
-  //       },
-  //       {
-  //         receiverId: selector.getContractId(),
-  //         actions: [
-  //           {
-  //             type: 'FunctionCall',
-  //             params: {
-  //               methodName: 'addMessage',
-  //               args: { text: 'Hello World!' },
-  //               gas: BOATLOAD_OF_GAS,
-  //               deposit: utils.format.parseNearAmount('0')!,
-  //             },
-  //           },
-  //         ],
-  //       },
-  //     ],
-  //   });
-  // };
-
   // const handleSubmit = useCallback(
-  //   (e: SubmitEvent) => {
+  //   async (e: SubmitEvent) => {
   //     e.preventDefault();
 
   //     // TODO: Fix the typing so that target.elements exists..
   //     // eslint-disable-next-line
+  //     //@typescript-eslint/ban-ts-comment
   //     // @ts-ignore.
-  //     const { fieldset, message, donation } = e.target.elements;
+  //     const { fieldset, message, donation, multiple } = e.target.elements;
 
   //     fieldset.disabled = true;
 
-  //     // TODO: optimistically update page with new message,
-  //     // update blockchain data in background
-  //     // add uuid to each message, so we know which one is already known
-  //     selector
-  //       .signAndSendTransaction({
-  //         signerId: accountId!,
-  //         actions: [
-  //           {
-  //             type: 'FunctionCall',
-  //             params: {
-  //               methodName: 'addMessage',
-  //               args: { text: message.value },
-  //               gas: BOATLOAD_OF_GAS,
-  //               // eslint-disable-next-line
-  //               deposit: utils.format.parseNearAmount(donation.value || '0')!,
-  //             },
-  //           },
-  //         ],
-  //       })
-  //       .catch((err) => {
-  //         alert('Failed to add message');
-  //         console.log('Failed to add message');
-
-  //         throw err;
-  //       })
+  //     return addMessages(message.value, donation.value || '0', multiple.checked)
   //       .then(() => {
   //         return getMessages()
   //           .then((nextMessages) => {
@@ -190,7 +139,7 @@ function Content() {
   //         fieldset.disabled = false;
   //       });
   //   },
-  //   [selector, accountId, getMessages]
+  //   [addMessages, getMessages]
   // );
 
   if (loading) {
@@ -203,7 +152,7 @@ function Content() {
         <div>
           <button onClick={handleSignIn}>Log in</button>
         </div>
-        Logged In Successfully!!
+        <div style={{ color: 'white' }}>Click to Login</div>
       </Fragment>
     );
   }
@@ -212,16 +161,18 @@ function Content() {
     <Fragment>
       <div>
         <button onClick={handleSignOut}>Log out</button>
-        <button onClick={handleSwitchProvider}>Switch Provider</button>
-        {/* <button onClick={handleSendMultipleTransactions}>
-          Send Multiple Transactions
-        </button> */}
+        <button onClick={handleSwitchWallet}>Switch Wallet</button>
         {accounts.length > 1 && (
           <button onClick={handleSwitchAccount}>Switch Account</button>
         )}
       </div>
+      {/* <Form
+        account={account}
+        onSubmit={(e) => handleSubmit(e as unknown as SubmitEvent)}
+      />
+      <Messages messages={messages} /> */}
     </Fragment>
   );
-}
+};
 
 export default Content;
